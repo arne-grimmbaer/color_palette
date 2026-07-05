@@ -1340,14 +1340,15 @@
   function renderDrawPalette() {
     const wrap = document.getElementById('drawPalette');
     wrap.innerHTML = '';
-    if (state.fixedColors.length === 0) {
+    const visible = state.fixedColors.filter(fc => !(fc.group && state.hiddenGroups.includes(fc.group)));
+    if (visible.length === 0) {
       const msg = document.createElement('div');
       msg.className = 'draw-empty';
       msg.textContent = 'Pin or pick colors above to add brushes.';
       wrap.appendChild(msg);
       return;
     }
-    state.fixedColors.forEach(fc => {
+    visible.forEach(fc => {
       const dot = document.createElement('div');
       dot.className = 'draw-swatch' + (fc.hex === drawColor ? ' selected' : '');
       dot.style.background = fc.hex;
