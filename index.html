@@ -139,6 +139,31 @@
     padding: 8px 10px;
     font-size: 0.9rem;
   }
+  .field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 6px;
+    user-select: none;
+  }
+  .field-header label { margin-bottom: 0; }
+  .field-header .chevron {
+    color: var(--muted);
+    font-size: 0.8rem;
+    transition: transform 0.15s;
+  }
+  .collapsible-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .collapsible-field.collapsed .collapsible-body {
+    display: none;
+  }
+  .collapsible-field.collapsed .chevron {
+    transform: rotate(-90deg);
+  }
   .harmony-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -570,6 +595,32 @@
   </div>
 
   <div class="controls">
+    <div class="field collapsible-field">
+      <div class="field-header" id="maskHeader">
+        <label style="margin-bottom:0;">Harmony mask</label>
+        <span class="chevron" id="maskChevron">&#9662;</span>
+      </div>
+      <div class="collapsible-body" id="maskBody">
+        <div class="harmony-grid">
+          <div class="harmony-btn active" data-mode="complementary">Complementary</div>
+          <div class="harmony-btn" data-mode="analogous">Analogous</div>
+          <div class="harmony-btn" data-mode="splitComplementary">Split-Complementary</div>
+          <div class="harmony-btn" data-mode="triadic">Triadic</div>
+          <div class="harmony-btn" data-mode="rightTriangle">Right Triangle</div>
+        </div>
+
+        <div class="field" id="spreadField">
+          <label id="spreadLabel">Spread <span class="val" id="spreadVal">30°</span></label>
+          <input type="range" id="spread" min="10" max="60" value="30">
+        </div>
+
+        <div class="field" id="flipField">
+          <label>Orientation</label>
+          <div class="harmony-btn" id="flipBtn" style="text-align:center;">Flip</div>
+        </div>
+      </div>
+    </div>
+
     <div class="field">
       <label>Color wheel type</label>
       <select id="wheelType">
@@ -614,27 +665,6 @@
         <button id="saveBtn">Save</button>
       </div>
       <div class="save-list" id="saveList"></div>
-    </div>
-
-    <div class="field">
-      <label>Harmony mask</label>
-      <div class="harmony-grid">
-        <div class="harmony-btn active" data-mode="complementary">Complementary</div>
-        <div class="harmony-btn" data-mode="analogous">Analogous</div>
-        <div class="harmony-btn" data-mode="splitComplementary">Split-Complementary</div>
-        <div class="harmony-btn" data-mode="triadic">Triadic</div>
-        <div class="harmony-btn" data-mode="rightTriangle">Right Triangle</div>
-      </div>
-    </div>
-
-    <div class="field" id="spreadField">
-      <label id="spreadLabel">Spread <span class="val" id="spreadVal">30°</span></label>
-      <input type="range" id="spread" min="10" max="60" value="30">
-    </div>
-
-    <div class="field" id="flipField">
-      <label>Orientation</label>
-      <div class="harmony-btn" id="flipBtn" style="text-align:center;">Flip</div>
     </div>
 
     <div class="field">
@@ -1382,6 +1412,11 @@
 
   document.getElementById('clearDrawBtn').addEventListener('click', () => {
     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  });
+
+  // ---- collapsible mask setup ----
+  document.getElementById('maskHeader').addEventListener('click', () => {
+    document.getElementById('maskHeader').closest('.collapsible-field').classList.toggle('collapsed');
   });
 
   // ---- lock shape / pick colors from wheel ----
