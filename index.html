@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Color Palette Wheel</title>
+<style>
+  :root {
+    --bg: #14151a;
+    --panel: #1d1f26;
+    --text: #e8e9ee;
+    --muted: #9a9ea8;
+    --accent: #6c8cff;
+    --border: #2c2f38;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 60px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  p.subtitle {
+    color: var(--muted);
+    margin: 0 0 24px;
+    font-size: 0.9rem;
+    text-align: center;
+    max-width: 480px;
+  }
+  .layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 960px;
+  }
+  .wheel-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .wheel-wrap {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    touch-action: none;
+  }
+  canvas#wheel {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    cursor: crosshair;
+    box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.4);
+  }
+  svg#mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .marker {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+  .marker.base {
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border-width: 3px;
+    box-shadow: 0 0 0 2px #000, 0 0 0 4px rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.6);
+    cursor: grab;
+    pointer-events: auto;
+  }
+  .marker.fixed {
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    border-radius: 0;
+    border-width: 2px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5);
+    transform: rotate(45deg);
+  }
+
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .field label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .field label span.val {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  select, input[type=range] {
+    width: 100%;
+  }
+  select {
+    background: #14151a;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+  }
+  .harmony-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .harmony-btn {
+    background: #14151a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 8px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .harmony-btn:hover { border-color: #454a58; }
+  .harmony-btn.active {
+    border-color: var(--accent);
+    background: rgba(108,140,255,0.12);
+  }
+  input[type=range] {
+    accent-color: var(--accent);
+  }
+
+  .hex-row { display: flex; gap: 8px; }
+  .hex-row input[type=text] {
+    flex: 1;
+    background: #14151a;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .hex-row button {
+    background: var(--accent);
+    color: #0d0e12;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .hex-row button:hover { filter: brightness(1.08); }
+  .hex-error {
+    font-size: 0.75rem;
+    color: #ff8080;
+    min-height: 1.1em;
+  }
+  .pin-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pin-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #14151a;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 4px 3px 3px;
+    font-size: 0.75rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .pin-chip .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  .pin-chip button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 2px;
+  }
+  .pin-chip button:hover { color: #ff8080; }
+
+  .draw-wrap { margin-top: 4px; }
+  .draw-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .draw-toolbar span {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .draw-toolbar button {
+    background: #14151a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .draw-toolbar button:hover { border-color: #454a58; }
+  .draw-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+    min-height: 24px;
+  }
+  .draw-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.15);
+    cursor: pointer;
+  }
+  .draw-swatch.selected { border-color: var(--accent); }
+  .draw-empty {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  canvas#drawCanvas {
+    display: block;
+    width: 100%;
+    height: 200px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0d0e12;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .save-row { display: flex; gap: 8px; }
+  .save-row input[type=text] {
+    flex: 1;
+    background: #14151a;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  .save-row button {
+    background: var(--accent);
+    color: #0d0e12;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .save-row button:hover { filter: brightness(1.08); }
+  .save-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .save-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #14151a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+  }
+  .save-item .name {
+    flex: 1;
+    font-size: 0.85rem;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .save-item .name:hover { color: var(--accent); }
+  .save-item input.rename {
+    flex: 1;
+    background: #0d0e12;
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 0.85rem;
+    min-width: 0;
+  }
+  .save-item button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 2px 4px;
+    line-height: 1;
+  }
+  .save-item button:hover { color: var(--text); }
+  .save-item button.delete:hover { color: #ff8080; }
+  .save-empty {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .swatches {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 28px;
+  }
+  .swatch {
+    width: 130px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+  }
+  .swatch .remove {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border: none;
+    font-size: 0.75rem;
+    line-height: 18px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .swatch .chip {
+    height: 84px;
+  }
+  .swatch .info {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+  }
+  .swatch .info .role {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.65rem;
+    margin-bottom: 2px;
+  }
+  .swatch .info .hex {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #24262f;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<nav style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">Harmony Wheel &nbsp;|&nbsp; <a href="gamut_mask.html" style="color:var(--muted);border-bottom:1px dashed var(--border);text-decoration:none;">Gamut Mask &rarr;</a></nav>
+<h1>Color Palette Wheel</h1>
+<p class="subtitle">Drag the marker to pick a base color. Choose a harmony mask and scale it with the spread slider. Switch between color wheel geometries below.</p>
+
+<div class="layout">
+  <div class="wheel-panel">
+    <div class="wheel-wrap" id="wheelWrap">
+      <canvas id="wheel" width="320" height="320"></canvas>
+      <svg id="mask" viewBox="0 0 320 320"></svg>
+      <div id="markers"></div>
+    </div>
+    <div class="field" style="width: 320px;">
+      <div class="harmony-btn" id="lockBtn" style="text-align:center;">🔒 Lock shape (click wheel to pick colors)</div>
+    </div>
+    <div class="field" style="width: 320px;">
+      <label id="lightLabel">Lightness <span class="val" id="lightVal">50%</span></label>
+      <input type="range" id="lightness" min="10" max="90" value="50">
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label>Color wheel type</label>
+      <select id="wheelType">
+        <option value="rgb">RGB / HSL (standard)</option>
+        <option value="hsv">RGB / HSV (true)</option>
+        <option value="ryb">RYB (artist / traditional)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Pin a fixed color</label>
+      <div class="hex-row">
+        <input type="text" id="hexInput" placeholder="#ff6633" maxlength="7">
+        <button id="pinBtn" style="flex:0 0 auto;">Pin</button>
+      </div>
+      <div class="hex-error" id="hexError"></div>
+      <div class="pin-list" id="pinList"></div>
+
+      <div class="draw-wrap">
+        <div class="draw-toolbar">
+          <span>Draw with picked colors</span>
+          <button id="clearDrawBtn">Clear</button>
+        </div>
+        <div class="draw-palette" id="drawPalette"></div>
+        <canvas id="drawCanvas" width="300" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Save configuration</label>
+      <div class="save-row">
+        <input type="text" id="saveNameInput" placeholder="Name this palette">
+        <button id="saveBtn">Save</button>
+      </div>
+      <div class="save-list" id="saveList"></div>
+    </div>
+
+    <div class="field">
+      <label>Harmony mask</label>
+      <div class="harmony-grid">
+        <div class="harmony-btn active" data-mode="complementary">Complementary</div>
+        <div class="harmony-btn" data-mode="analogous">Analogous</div>
+        <div class="harmony-btn" data-mode="splitComplementary">Split-Complementary</div>
+        <div class="harmony-btn" data-mode="triadic">Triadic</div>
+        <div class="harmony-btn" data-mode="rightTriangle">Right Triangle</div>
+      </div>
+    </div>
+
+    <div class="field" id="spreadField">
+      <label id="spreadLabel">Spread <span class="val" id="spreadVal">30°</span></label>
+      <input type="range" id="spread" min="10" max="60" value="30">
+    </div>
+
+    <div class="field" id="flipField">
+      <label>Orientation</label>
+      <div class="harmony-btn" id="flipBtn" style="text-align:center;">Flip</div>
+    </div>
+
+    <div class="field">
+      <label>Base hue <span class="val" id="hueVal">0°</span></label>
+      <input type="range" id="hueSlider" min="0" max="359" value="0">
+    </div>
+
+    <div class="field">
+      <label>Saturation <span class="val" id="satVal">100%</span></label>
+      <input type="range" id="satSlider" min="0" max="100" value="100">
+    </div>
+  </div>
+</div>
+
+<div class="swatches" id="swatches"></div>
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas.getContext('2d');
+  const maskSvg = document.getElementById('mask');
+  const markersEl = document.getElementById('markers');
+  const wheelWrap = document.getElementById('wheelWrap');
+  const size = 320;
+  const center = size / 2;
+  const radius = size / 2 - 2;
+
+  const state = {
+    wheelType: 'rgb',
+    mode: 'complementary',
+    baseHue: 0,      // hue in "wheel space" (0-360), matches artistic wheel position
+    sat: 100,
+    light: 50,
+    spread: 30,
+    flip: false,
+    locked: false,   // when true, wheel clicks pick a color instead of moving the shape
+    fixedColors: []  // [{hex,r,g,b,hue,sat,light}] -- hue/sat/light are the real HSL of the hex
+  };
+
+  // ---- RYB (artist wheel) <-> HSV hue remap via piecewise-linear anchors ----
+  // wheel-space angle -> real HSV hue
+  const RYB_ANCHORS = [
+    [0, 0], [30, 15], [60, 35], [90, 45], [120, 60], [150, 90],
+    [180, 135], [210, 180], [240, 240], [270, 270], [300, 285],
+    [330, 320], [360, 360]
+  ];
+  const RYB_ANCHORS_INV = RYB_ANCHORS.map(([a, b]) => [b, a]);
+
+  function interpolate(anchors, x) {
+    x = ((x % 360) + 360) % 360;
+    for (let i = 0; i < anchors.length - 1; i++) {
+      const [x0, y0] = anchors[i];
+      const [x1, y1] = anchors[i + 1];
+      if (x >= x0 && x <= x1) {
+        const t = (x - x0) / (x1 - x0);
+        return y0 + t * (y1 - y0);
+      }
+    }
+    return x;
+  }
+
+  function wheelHueToHsvHue(wheelHue) {
+    if (state.wheelType === 'ryb') return interpolate(RYB_ANCHORS, wheelHue);
+    return ((wheelHue % 360) + 360) % 360;
+  }
+
+  function hsvHueToWheelHue(hsvHue) {
+    if (state.wheelType === 'ryb') return interpolate(RYB_ANCHORS_INV, hsvHue);
+    return ((hsvHue % 360) + 360) % 360;
+  }
+
+  // ---- color conversion ----
+  function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    s /= 100; l /= 100;
+    if (s === 0) {
+      const v = Math.round(l * 255);
+      return [v, v, v];
+    }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const r = hue2rgb(p, q, h + 1 / 3);
+    const g = hue2rgb(p, q, h);
+    const b = hue2rgb(p, q, h - 1 / 3);
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  function rgbToHex([r, g, b]) {
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  function hexToRgb(hex) {
+    hex = hex.trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) hex = hex.split('').map(c => c + c).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+    const num = parseInt(hex, 16);
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s;
+    const l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4; break;
+      }
+      h *= 60;
+    }
+    return [h, s * 100, l * 100];
+  }
+
+  function hsvToRgb(h, s, v) {
+    h = ((h % 360) + 360) % 360 / 360;
+    s /= 100; v /= 100;
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = v * (1 - s);
+    const q = v * (1 - f * s);
+    const t = v * (1 - (1 - f) * s);
+    let r, g, b;
+    switch (i % 6) {
+      case 0: r = v; g = t; b = p; break;
+      case 1: r = q; g = v; b = p; break;
+      case 2: r = p; g = v; b = t; break;
+      case 3: r = p; g = q; b = v; break;
+      case 4: r = t; g = p; b = v; break;
+      default: r = v; g = p; b = q; break;
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    let h;
+    if (d === 0) h = 0;
+    else {
+      switch (max) {
+        case r: h = ((g - b) / d) % 6; break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4; break;
+      }
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    const s = max === 0 ? 0 : d / max;
+    return [h, s * 100, max * 100];
+  }
+
+  // hue is identical under HSL and HSV; only saturation/third-channel differ by model
+  function modelHueSat(r, g, b) {
+    return state.wheelType === 'hsv' ? rgbToHsv(r, g, b) : rgbToHsl(r, g, b);
+  }
+
+  function wheelColorAt(wheelHue, sat, light) {
+    const hsvHue = wheelHueToHsvHue(wheelHue);
+    return state.wheelType === 'hsv' ? hsvToRgb(hsvHue, sat, light) : hslToRgb(hsvHue, sat, light);
+  }
+
+  // ---- render color wheel via pixel buffer ----
+  function drawWheel() {
+    const img = ctx.createImageData(size, size);
+    const data = img.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - center;
+        const dy = y - center;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const idx = (y * size + x) * 4;
+        if (dist > radius) {
+          data[idx + 3] = 0;
+          continue;
+        }
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180, 0 = +x axis
+        angle = (angle + 360) % 360;
+        // rotate so 0deg points up, matches marker placement convention below
+        const wheelHue = (angle + 90) % 360;
+        const sat = Math.min(100, (dist / radius) * 100);
+        const [r, g, b] = wheelColorAt(wheelHue, sat, state.light);
+        data[idx] = r;
+        data[idx + 1] = g;
+        data[idx + 2] = b;
+        data[idx + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  // ---- angle/position helpers ----
+  // wheelHue 0 = top (12 o'clock), increasing clockwise
+  function hueSatToXY(wheelHue, sat) {
+    const rad = (wheelHue - 90) * Math.PI / 180;
+    const r = (sat / 100) * radius;
+    return [center + r * Math.cos(rad), center + r * Math.sin(rad)];
+  }
+
+  function xyToHueSat(x, y) {
+    const dx = x - center;
+    const dy = y - center;
+    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    let wheelHue = (angle + 90 + 360) % 360;
+    const dist = Math.min(radius, Math.sqrt(dx * dx + dy * dy));
+    const sat = (dist / radius) * 100;
+    return [wheelHue, sat];
+  }
+
+  // ---- harmony definitions ----
+  function harmonyOffsets(mode, spread, flip) {
+    switch (mode) {
+      case 'complementary':
+        return [{ off: 0, role: 'Base' }, { off: 180, role: 'Complement' }];
+      case 'analogous':
+        return [
+          { off: -spread, role: 'Analogous -' },
+          { off: 0, role: 'Base' },
+          { off: spread, role: 'Analogous +' }
+        ];
+      case 'splitComplementary':
+        return [
+          { off: 0, role: 'Base' },
+          { off: 180 - spread, role: 'Split -' },
+          { off: 180 + spread, role: 'Split +' }
+        ];
+      case 'triadic':
+        return [
+          { off: 0, role: 'Base' },
+          { off: 120, role: 'Triad 1' },
+          { off: 240, role: 'Triad 2' }
+        ];
+      case 'rightTriangle': {
+        // Base + Complement form a diameter; by Thales' theorem any third point
+        // on the circle sees that diameter at a right angle. "Spread" moves the
+        // third vertex along the arc; "flip" mirrors it to the other side.
+        const sign = flip ? -1 : 1;
+        return [
+          { off: 0, role: 'Base' },
+          { off: 180, role: 'Complement' },
+          { off: sign * spread, role: 'Right-angle vertex' }
+        ];
+      }
+    }
+  }
+
+  function currentHarmonyHues() {
+    const offsets = harmonyOffsets(state.mode, state.spread, state.flip);
+    return offsets.map(o => ({
+      wheelHue: (state.baseHue + o.off + 360) % 360,
+      role: o.role,
+      isBase: o.off === 0
+    }));
+  }
+
+  // ---- mask + markers rendering ----
+  function svgSectorPath(centerAngleDeg, halfWidthDeg) {
+    const a0 = centerAngleDeg - halfWidthDeg;
+    const a1 = centerAngleDeg + halfWidthDeg;
+    const [x0, y0] = hueSatToXY(a0, 100);
+    const [x1, y1] = hueSatToXY(a1, 100);
+    const largeArc = halfWidthDeg * 2 > 180 ? 1 : 0;
+    return `M ${center} ${center} L ${x0} ${y0} A ${radius} ${radius} 0 ${largeArc} 1 ${x1} ${y1} Z`;
+  }
+
+  function renderMask() {
+    maskSvg.innerHTML = '';
+    const hues = currentHarmonyHues();
+
+    if (state.mode === 'rightTriangle') {
+      const pts = hues.map(h => hueSatToXY(h.wheelHue, state.sat));
+      const d = `M ${pts[0][0]} ${pts[0][1]} L ${pts[1][0]} ${pts[1][1]} L ${pts[2][0]} ${pts[2][1]} Z`;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'rgba(255,255,255,0.12)');
+      path.setAttribute('stroke', 'rgba(255,255,255,0.7)');
+      path.setAttribute('stroke-width', '2');
+      maskSvg.appendChild(path);
+      return;
+    }
+
+    const sectorWidth = state.mode === 'analogous' || state.mode === 'splitComplementary' ? 12 : 10;
+    hues.forEach(h => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', svgSectorPath(h.wheelHue, sectorWidth));
+      path.setAttribute('fill', h.isBase ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.14)');
+      path.setAttribute('stroke', 'rgba(255,255,255,0.6)');
+      path.setAttribute('stroke-width', '1.5');
+      maskSvg.appendChild(path);
+    });
+  }
+
+  function renderMarkers() {
+    markersEl.innerHTML = '';
+    const hues = currentHarmonyHues();
+    hues.forEach(h => {
+      const [x, y] = hueSatToXY(h.wheelHue, state.sat);
+      const [r, g, b] = wheelColorAt(h.wheelHue, state.sat, state.light);
+      const el = document.createElement('div');
+      el.className = 'marker' + (h.isBase ? ' base' : '');
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.background = `rgb(${r},${g},${b})`;
+      el.title = h.role;
+      if (h.isBase) el.id = 'baseMarker';
+      markersEl.appendChild(el);
+    });
+
+    state.fixedColors.forEach(fc => {
+      const [hue, sat] = modelHueSat(fc.r, fc.g, fc.b);
+      const wheelHue = hsvHueToWheelHue(hue);
+      const [x, y] = hueSatToXY(wheelHue, sat);
+      const el = document.createElement('div');
+      el.className = 'marker fixed';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.background = fc.hex;
+      el.title = 'Fixed: ' + fc.hex;
+      markersEl.appendChild(el);
+    });
+  }
+
+  function renderSwatches() {
+    const container = document.getElementById('swatches');
+    container.innerHTML = '';
+    const hues = currentHarmonyHues();
+    hues.forEach(h => {
+      const [r, g, b] = wheelColorAt(h.wheelHue, state.sat, state.light);
+      const hex = rgbToHex([r, g, b]);
+      const el = document.createElement('div');
+      el.className = 'swatch';
+      el.innerHTML = `
+        <div class="chip" style="background:${hex}"></div>
+        <div class="info">
+          <div class="role">${h.role}</div>
+          <div class="hex">${hex}</div>
+        </div>`;
+      el.addEventListener('click', () => copyToClipboard(hex));
+      container.appendChild(el);
+    });
+
+    state.fixedColors.forEach((fc, i) => {
+      const el = document.createElement('div');
+      el.className = 'swatch';
+      el.innerHTML = `
+        <div class="chip" style="background:${fc.hex}"></div>
+        <button class="remove" title="Remove">&times;</button>
+        <div class="info">
+          <div class="role">Fixed</div>
+          <div class="hex">${fc.hex}</div>
+        </div>`;
+      el.querySelector('.chip').addEventListener('click', () => copyToClipboard(fc.hex));
+      el.querySelector('.remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.fixedColors.splice(i, 1);
+        renderAll();
+      });
+      container.appendChild(el);
+    });
+  }
+
+  function renderPinList() {
+    const list = document.getElementById('pinList');
+    list.innerHTML = '';
+    state.fixedColors.forEach((fc, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'pin-chip';
+      chip.innerHTML = `<span class="dot" style="background:${fc.hex}"></span>${fc.hex}<button title="Remove">&times;</button>`;
+      chip.querySelector('button').addEventListener('click', () => {
+        state.fixedColors.splice(i, 1);
+        renderAll();
+      });
+      list.appendChild(chip);
+    });
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    const toast = document.getElementById('toast');
+    toast.textContent = `Copied ${text}`;
+    toast.classList.add('show');
+    clearTimeout(copyToClipboard._t);
+    copyToClipboard._t = setTimeout(() => toast.classList.remove('show'), 1200);
+  }
+
+  function renderAll() {
+    renderMask();
+    renderMarkers();
+    renderSwatches();
+    renderPinList();
+    renderDrawPalette();
+  }
+
+  // ---- pin-by-hex controls ----
+  const hexInput = document.getElementById('hexInput');
+  const hexError = document.getElementById('hexError');
+  function tryPin() {
+    const rgb = hexToRgb(hexInput.value);
+    if (!rgb) {
+      hexError.textContent = 'Enter a valid hex code, e.g. #ff6633';
+      return;
+    }
+    hexError.textContent = '';
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2] });
+    hexInput.value = '';
+    renderAll();
+  }
+  document.getElementById('pinBtn').addEventListener('click', tryPin);
+  hexInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPin(); });
+
+  // ---- freehand drawing canvas using picked colors as brushes ----
+  const drawCanvas = document.getElementById('drawCanvas');
+  const drawCtx = drawCanvas.getContext('2d');
+  let drawColor = '#e8e9ee';
+  let isDrawingOnCanvas = false;
+  let lastDrawPos = null;
+
+  function renderDrawPalette() {
+    const wrap = document.getElementById('drawPalette');
+    wrap.innerHTML = '';
+    if (state.fixedColors.length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'draw-empty';
+      msg.textContent = 'Pin or pick colors above to add brushes.';
+      wrap.appendChild(msg);
+      return;
+    }
+    state.fixedColors.forEach(fc => {
+      const dot = document.createElement('div');
+      dot.className = 'draw-swatch' + (fc.hex === drawColor ? ' selected' : '');
+      dot.style.background = fc.hex;
+      dot.title = fc.hex;
+      dot.addEventListener('click', () => {
+        drawColor = fc.hex;
+        renderDrawPalette();
+      });
+      wrap.appendChild(dot);
+    });
+  }
+
+  function getDrawPos(clientX, clientY) {
+    const rect = drawCanvas.getBoundingClientRect();
+    const scaleX = drawCanvas.width / rect.width;
+    const scaleY = drawCanvas.height / rect.height;
+    return [(clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY];
+  }
+
+  function drawDot(x, y) {
+    drawCtx.fillStyle = drawColor;
+    drawCtx.beginPath();
+    drawCtx.arc(x, y, 6, 0, Math.PI * 2);
+    drawCtx.fill();
+  }
+
+  function drawLine(x0, y0, x1, y1) {
+    drawCtx.strokeStyle = drawColor;
+    drawCtx.lineWidth = 12;
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+    drawCtx.beginPath();
+    drawCtx.moveTo(x0, y0);
+    drawCtx.lineTo(x1, y1);
+    drawCtx.stroke();
+  }
+
+  function canvasPointerDown(e) {
+    isDrawingOnCanvas = true;
+    const p = e.touches ? e.touches[0] : e;
+    const [x, y] = getDrawPos(p.clientX, p.clientY);
+    lastDrawPos = [x, y];
+    drawDot(x, y);
+    e.preventDefault();
+  }
+  function canvasPointerMove(e) {
+    if (!isDrawingOnCanvas) return;
+    const p = e.touches ? e.touches[0] : e;
+    const [x, y] = getDrawPos(p.clientX, p.clientY);
+    drawLine(lastDrawPos[0], lastDrawPos[1], x, y);
+    lastDrawPos = [x, y];
+    e.preventDefault();
+  }
+  function canvasPointerUp() { isDrawingOnCanvas = false; lastDrawPos = null; }
+
+  drawCanvas.addEventListener('mousedown', canvasPointerDown);
+  window.addEventListener('mousemove', canvasPointerMove);
+  window.addEventListener('mouseup', canvasPointerUp);
+  drawCanvas.addEventListener('touchstart', canvasPointerDown, { passive: false });
+  window.addEventListener('touchmove', canvasPointerMove, { passive: false });
+  window.addEventListener('touchend', canvasPointerUp);
+
+  document.getElementById('clearDrawBtn').addEventListener('click', () => {
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  });
+
+  // ---- lock shape / pick colors from wheel ----
+  const lockBtn = document.getElementById('lockBtn');
+  lockBtn.addEventListener('click', () => {
+    state.locked = !state.locked;
+    lockBtn.classList.toggle('active', state.locked);
+    lockBtn.textContent = state.locked
+      ? '🔓 Unlock shape'
+      : '🔒 Lock shape (click wheel to pick colors)';
+  });
+
+  function pickColorAt(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = size / rect.width;
+    const scaleY = size / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    const [wheelHue, sat] = xyToHueSat(x, y);
+    const rgb = wheelColorAt(wheelHue, sat, state.light);
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2] });
+    renderAll();
+  }
+
+  // ---- save / load configurations (localStorage) ----
+  const SAVE_KEY = 'colorPaletteWheel.saves';
+
+  function loadSaves() {
+    try {
+      return JSON.parse(localStorage.getItem(SAVE_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function persistSaves(saves) {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saves));
+  }
+
+  function snapshotState() {
+    return {
+      wheelType: state.wheelType,
+      mode: state.mode,
+      baseHue: state.baseHue,
+      sat: state.sat,
+      light: state.light,
+      spread: state.spread,
+      flip: state.flip,
+      fixedColors: state.fixedColors
+    };
+  }
+
+  function applyState(saved) {
+    Object.assign(state, saved);
+    wheelTypeSelect.value = state.wheelType;
+    hueSlider.value = state.baseHue;
+    satSlider.value = state.sat;
+    document.getElementById('hueVal').textContent = state.baseHue + '°';
+    document.getElementById('satVal').textContent = state.sat + '%';
+    flipBtn.classList.toggle('active', state.flip);
+    applyModeUI();
+    updateLightRange();
+    drawWheel();
+    renderAll();
+  }
+
+  function renderSaveList() {
+    const list = document.getElementById('saveList');
+    list.innerHTML = '';
+    const saves = loadSaves();
+    const names = Object.keys(saves).sort((a, b) => a.localeCompare(b));
+    if (names.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'save-empty';
+      empty.textContent = 'No saved palettes yet.';
+      list.appendChild(empty);
+      return;
+    }
+    names.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'save-item';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'name';
+      nameEl.textContent = name;
+      nameEl.title = 'Load "' + name + '"';
+      nameEl.addEventListener('click', () => {
+        const s = loadSaves()[name];
+        if (s) applyState(s);
+      });
+
+      const renameBtn = document.createElement('button');
+      renameBtn.textContent = '✎';
+      renameBtn.title = 'Rename';
+      renameBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.className = 'rename';
+        input.value = name;
+        item.replaceChild(input, nameEl);
+        renameBtn.style.display = 'none';
+        input.focus();
+        input.select();
+        const commit = () => {
+          const newName = input.value.trim();
+          const current = loadSaves();
+          if (newName && newName !== name && !(newName in current)) {
+            current[newName] = current[name];
+            delete current[name];
+            persistSaves(current);
+          }
+          renderSaveList();
+        };
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') renderSaveList();
+        });
+        input.addEventListener('blur', commit);
+      });
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete';
+      deleteBtn.textContent = '×';
+      deleteBtn.title = 'Delete';
+      deleteBtn.addEventListener('click', () => {
+        const current = loadSaves();
+        delete current[name];
+        persistSaves(current);
+        renderSaveList();
+      });
+
+      item.appendChild(nameEl);
+      item.appendChild(renameBtn);
+      item.appendChild(deleteBtn);
+      list.appendChild(item);
+    });
+  }
+
+  const saveNameInput = document.getElementById('saveNameInput');
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const name = saveNameInput.value.trim();
+    if (!name) return;
+    const saves = loadSaves();
+    saves[name] = snapshotState();
+    persistSaves(saves);
+    saveNameInput.value = '';
+    renderSaveList();
+  });
+  saveNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('saveBtn').click();
+  });
+
+  // ---- UI wiring ----
+  const wheelTypeSelect = document.getElementById('wheelType');
+  const lightLabel = document.getElementById('lightLabel');
+  function updateLightRange() {
+    lightLabel.childNodes[0].textContent = state.wheelType === 'hsv' ? 'Value ' : 'Lightness ';
+    if (state.wheelType === 'hsv') {
+      lightSlider.min = 0;
+      lightSlider.max = 100;
+    } else {
+      lightSlider.min = 10;
+      lightSlider.max = 90;
+      if (state.light < 10) state.light = 10;
+      if (state.light > 90) state.light = 90;
+    }
+    lightSlider.value = state.light;
+    document.getElementById('lightVal').textContent = state.light + '%';
+  }
+  wheelTypeSelect.addEventListener('change', () => {
+    state.wheelType = wheelTypeSelect.value;
+    updateLightRange();
+    drawWheel();
+    renderAll();
+  });
+
+  const spreadLabel = document.getElementById('spreadLabel');
+  const flipField = document.getElementById('flipField');
+  const flipBtn = document.getElementById('flipBtn');
+
+  function applyModeUI() {
+    document.querySelectorAll('.harmony-btn[data-mode]').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === state.mode);
+    });
+
+    const spreadField = document.getElementById('spreadField');
+    const usesSpread = state.mode === 'analogous' || state.mode === 'splitComplementary' || state.mode === 'rightTriangle';
+    spreadField.style.display = usesSpread ? 'block' : 'none';
+    flipField.style.display = state.mode === 'rightTriangle' ? 'block' : 'none';
+
+    const spreadSlider = document.getElementById('spread');
+    if (state.mode === 'rightTriangle') {
+      spreadSlider.min = 20;
+      spreadSlider.max = 160;
+      if (state.spread < 20 || state.spread > 160) state.spread = 70;
+      spreadLabel.childNodes[0].textContent = 'Vertex angle ';
+    } else {
+      spreadSlider.min = 10;
+      spreadSlider.max = 60;
+      if (state.spread < 10 || state.spread > 60) state.spread = 30;
+      spreadLabel.childNodes[0].textContent = 'Spread ';
+    }
+    spreadSlider.value = state.spread;
+    document.getElementById('spreadVal').textContent = state.spread + '°';
+  }
+
+  document.querySelectorAll('.harmony-btn[data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.mode = btn.dataset.mode;
+      applyModeUI();
+      renderAll();
+    });
+  });
+  document.getElementById('spreadField').style.display = 'none';
+  flipField.style.display = 'none';
+
+  flipBtn.addEventListener('click', () => {
+    state.flip = !state.flip;
+    flipBtn.classList.toggle('active', state.flip);
+    renderAll();
+  });
+
+  const spreadSlider = document.getElementById('spread');
+  spreadSlider.addEventListener('input', () => {
+    state.spread = Number(spreadSlider.value);
+    document.getElementById('spreadVal').textContent = state.spread + '°';
+    renderAll();
+  });
+
+  const lightSlider = document.getElementById('lightness');
+  lightSlider.addEventListener('input', () => {
+    state.light = Number(lightSlider.value);
+    document.getElementById('lightVal').textContent = state.light + '%';
+    drawWheel();
+    renderAll();
+  });
+
+  const hueSlider = document.getElementById('hueSlider');
+  hueSlider.addEventListener('input', () => {
+    state.baseHue = Number(hueSlider.value);
+    document.getElementById('hueVal').textContent = state.baseHue + '°';
+    renderAll();
+  });
+
+  const satSlider = document.getElementById('satSlider');
+  satSlider.addEventListener('input', () => {
+    state.sat = Number(satSlider.value);
+    document.getElementById('satVal').textContent = state.sat + '%';
+    renderAll();
+  });
+
+  // ---- dragging on the wheel to set base hue/sat ----
+  let dragging = false;
+
+  function setFromPointer(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = size / rect.width;
+    const scaleY = size / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    const [wheelHue, sat] = xyToHueSat(x, y);
+    state.baseHue = Math.round(wheelHue);
+    state.sat = Math.round(sat);
+    hueSlider.value = state.baseHue;
+    satSlider.value = state.sat;
+    document.getElementById('hueVal').textContent = state.baseHue + '°';
+    document.getElementById('satVal').textContent = state.sat + '%';
+    renderAll();
+  }
+
+  function pointerDown(e) {
+    const p = e.touches ? e.touches[0] : e;
+    if (state.locked) {
+      pickColorAt(p.clientX, p.clientY);
+      e.preventDefault();
+      return;
+    }
+    dragging = true;
+    setFromPointer(p.clientX, p.clientY);
+    e.preventDefault();
+  }
+  function pointerMove(e) {
+    if (!dragging || state.locked) return;
+    const p = e.touches ? e.touches[0] : e;
+    setFromPointer(p.clientX, p.clientY);
+    e.preventDefault();
+  }
+  function pointerUp() { dragging = false; }
+
+  wheelWrap.addEventListener('mousedown', pointerDown);
+  window.addEventListener('mousemove', pointerMove);
+  window.addEventListener('mouseup', pointerUp);
+  wheelWrap.addEventListener('touchstart', pointerDown, { passive: false });
+  window.addEventListener('touchmove', pointerMove, { passive: false });
+  window.addEventListener('touchend', pointerUp);
+
+  // ---- init ----
+  updateLightRange();
+  drawWheel();
+  renderAll();
+  renderSaveList();
+})();
+</script>
+</body>
+</html>
