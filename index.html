@@ -198,7 +198,9 @@
     padding: 3px 4px 3px 3px;
     font-size: 0.75rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    cursor: grab;
   }
+  .pin-chip.dragging { opacity: 0.4; }
   .pin-chip .dot {
     width: 16px;
     height: 16px;
@@ -236,6 +238,80 @@
     padding: 0 2px;
   }
   .pin-chip button:hover { color: #ff8080; }
+  .pin-chip button.group-btn:hover { color: var(--accent); }
+  .pin-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+  .pin-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 6px;
+  }
+  .pin-group-header .gname {
+    cursor: text;
+  }
+  .pin-group-header .gname:hover { color: var(--text); }
+  .pin-group-header button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .pin-group-header button:hover { color: #ff8080; }
+  .pin-group-header button.hide-btn:hover { color: var(--accent); }
+  .pin-group.group-hidden .pin-group-chips { opacity: 0.4; }
+  .pin-group.group-hidden .gname { text-decoration: line-through; }
+  .pin-group-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 34px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+  .pin-group-chips.drag-over {
+    border-color: var(--accent);
+    background: rgba(108,140,255,0.08);
+  }
+  .group-add-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .group-add-row input[type=text] {
+    flex: 1;
+    background: #14151a;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+  }
+  .group-add-row button {
+    background: #14151a;
+    border: 1px solid var(--accent);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .group-add-row button:hover { background: rgba(108,140,255,0.12); }
 
   .draw-wrap { margin-top: 4px; }
   .draw-toolbar {
@@ -502,7 +578,12 @@
         <button id="pinBtn" style="flex:0 0 auto;">Pin</button>
       </div>
       <div class="hex-error" id="hexError"></div>
+      <div class="group-add-row">
+        <input type="text" id="newGroupInput" placeholder="New bucket name">
+        <button id="addGroupBtn">+ Bucket</button>
+      </div>
       <div class="pin-list" id="pinList"></div>
+      <datalist id="pinGroupOptions"></datalist>
 
       <div class="draw-wrap">
         <div class="draw-toolbar">
@@ -583,7 +664,9 @@
     spread: 30,
     flip: false,
     locked: false,   // when true, wheel clicks pick a color instead of moving the shape
-    fixedColors: []  // [{hex,r,g,b,hue,sat,light}] -- hue/sat/light are the real HSL of the hex
+    fixedColors: [], // [{hex,r,g,b,hue,sat,light}] -- hue/sat/light are the real HSL of the hex
+    colorGroups: [], // names of buckets that fixedColors[i].group can reference, in creation order
+    hiddenGroups: [] // names of groups whose fixedColors markers are hidden from the wheel
   };
 
   // ---- RYB (artist wheel) <-> HSV hue remap via piecewise-linear anchors ----
@@ -649,6 +732,13 @@
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function fcTooltip(fc) {
+    const parts = [];
+    if (fc.group) parts.push(fc.group);
+    if (fc.name) parts.push(fc.name);
+    return parts.length ? parts.join(' / ') + ' — ' + fc.hex : fc.hex;
   }
 
   function hexToRgb(hex) {
@@ -874,6 +964,7 @@
     });
 
     state.fixedColors.forEach(fc => {
+      if (fc.group && state.hiddenGroups.includes(fc.group)) return;
       const [hue, sat] = modelHueSat(fc.r, fc.g, fc.b);
       const wheelHue = hsvHueToWheelHue(hue);
       const [x, y] = hueSatToXY(wheelHue, sat);
@@ -882,7 +973,7 @@
       el.style.left = x + 'px';
       el.style.top = y + 'px';
       el.style.background = fc.hex;
-      el.title = (fc.name ? fc.name + ' — ' : '') + fc.hex;
+      el.title = fcTooltip(fc);
       markersEl.appendChild(el);
     });
   }
@@ -909,11 +1000,12 @@
     state.fixedColors.forEach((fc, i) => {
       const el = document.createElement('div');
       el.className = 'swatch';
+      const label = [fc.group, fc.name].filter(Boolean).map(escapeHtml).join(' · ') || 'Fixed';
       el.innerHTML = `
         <div class="chip" style="background:${fc.hex}"></div>
         <button class="remove" title="Remove">&times;</button>
         <div class="info">
-          <div class="role">${escapeHtml(fc.name) || 'Fixed'}</div>
+          <div class="role">${label}</div>
           <div class="hex">${fc.hex}</div>
         </div>`;
       el.querySelector('.chip').addEventListener('click', () => copyToClipboard(fc.hex));
@@ -926,53 +1018,225 @@
     });
   }
 
+  function renderPinGroupOptions() {
+    const dl = document.getElementById('pinGroupOptions');
+    dl.innerHTML = '';
+    state.colorGroups.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      dl.appendChild(opt);
+    });
+  }
+
+  let draggedIndex = null;
+
+  function makeDropzone(el, groupName) {
+    el.addEventListener('dragover', (e) => {
+      if (draggedIndex === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (draggedIndex === null) return;
+      const fc = state.fixedColors[draggedIndex];
+      if (fc) fc.group = groupName;
+      draggedIndex = null;
+      renderAll();
+    });
+  }
+
+  function makePinChip(fc, i) {
+    const chip = document.createElement('div');
+    chip.className = 'pin-chip';
+    chip.draggable = true;
+    chip.addEventListener('dragstart', (e) => {
+      draggedIndex = i;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i));
+      chip.classList.add('dragging');
+    });
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('dragging');
+      draggedIndex = null;
+    });
+
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = fc.hex;
+    chip.appendChild(dot);
+
+    const groupBtn = document.createElement('button');
+    groupBtn.className = 'group-btn';
+    groupBtn.textContent = '🏷';
+    groupBtn.title = fc.group ? `Group: ${fc.group} (click to change)` : 'Assign to a group';
+    groupBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.className = 'rename-inline';
+      input.setAttribute('list', 'pinGroupOptions');
+      input.value = fc.group || '';
+      input.placeholder = 'Group name';
+      chip.replaceChild(input, groupBtn);
+      input.focus();
+      input.select();
+      const commit = () => {
+        const val = input.value.trim();
+        fc.group = val;
+        if (val && !state.colorGroups.includes(val)) state.colorGroups.push(val);
+        renderAll();
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') renderAll();
+      });
+      input.addEventListener('blur', commit);
+    });
+    chip.appendChild(groupBtn);
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'name' + (fc.name ? '' : ' placeholder');
+    nameEl.textContent = fc.name || fc.hex;
+    nameEl.title = 'Click to name this color';
+    nameEl.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.className = 'rename-inline';
+      input.value = fc.name || '';
+      input.placeholder = fc.hex;
+      chip.replaceChild(input, nameEl);
+      input.focus();
+      input.select();
+      const commit = () => {
+        fc.name = input.value.trim();
+        renderAll();
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') renderAll();
+      });
+      input.addEventListener('blur', commit);
+    });
+    chip.appendChild(nameEl);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      state.fixedColors.splice(i, 1);
+      renderAll();
+    });
+    chip.appendChild(removeBtn);
+
+    return chip;
+  }
+
   function renderPinList() {
     const list = document.getElementById('pinList');
     list.innerHTML = '';
-    state.fixedColors.forEach((fc, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'pin-chip';
+    renderPinGroupOptions();
 
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = fc.hex;
-      chip.appendChild(dot);
+    const orphanGroups = [...new Set(state.fixedColors.map(fc => fc.group).filter(Boolean))]
+      .filter(g => !state.colorGroups.includes(g))
+      .sort((a, b) => a.localeCompare(b));
+    const groups = state.colorGroups.concat(orphanGroups);
 
-      const nameEl = document.createElement('span');
-      nameEl.className = 'name' + (fc.name ? '' : ' placeholder');
-      nameEl.textContent = fc.name || fc.hex;
-      nameEl.title = 'Click to name this color';
-      nameEl.addEventListener('click', () => {
+    groups.forEach(groupName => {
+      const section = document.createElement('div');
+      section.className = 'pin-group';
+
+      const header = document.createElement('div');
+      header.className = 'pin-group-header';
+
+      const gname = document.createElement('span');
+      gname.className = 'gname';
+      gname.textContent = groupName;
+      gname.title = 'Click to rename bucket';
+      gname.addEventListener('click', () => {
         const input = document.createElement('input');
         input.className = 'rename-inline';
-        input.value = fc.name || '';
-        input.placeholder = fc.hex;
-        chip.replaceChild(input, nameEl);
+        input.value = groupName;
+        header.replaceChild(input, gname);
         input.focus();
         input.select();
+        let committed = false;
         const commit = () => {
-          fc.name = input.value.trim();
+          if (committed) return;
+          committed = true;
+          const newName = input.value.trim();
+          if (newName && newName !== groupName) {
+            const gi = state.colorGroups.indexOf(groupName);
+            if (gi !== -1) state.colorGroups[gi] = newName;
+            else state.colorGroups.push(newName);
+            const hi = state.hiddenGroups.indexOf(groupName);
+            if (hi !== -1) state.hiddenGroups[hi] = newName;
+            state.fixedColors.forEach(fc => { if (fc.group === groupName) fc.group = newName; });
+          }
           renderAll();
         };
         input.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') renderAll();
+          if (e.key === 'Escape') { committed = true; renderAll(); }
         });
         input.addEventListener('blur', commit);
       });
-      chip.appendChild(nameEl);
+      header.appendChild(gname);
 
-      const removeBtn = document.createElement('button');
-      removeBtn.title = 'Remove';
-      removeBtn.textContent = '×';
-      removeBtn.addEventListener('click', () => {
-        state.fixedColors.splice(i, 1);
+      const isHidden = state.hiddenGroups.includes(groupName);
+      const hideBtn = document.createElement('button');
+      hideBtn.className = 'hide-btn';
+      hideBtn.textContent = isHidden ? '🙈' : '👁';
+      hideBtn.title = isHidden ? 'Show this group on the wheel' : 'Hide this group from the wheel';
+      hideBtn.addEventListener('click', () => {
+        const hi = state.hiddenGroups.indexOf(groupName);
+        if (hi !== -1) state.hiddenGroups.splice(hi, 1);
+        else state.hiddenGroups.push(groupName);
         renderAll();
       });
-      chip.appendChild(removeBtn);
+      header.appendChild(hideBtn);
 
-      list.appendChild(chip);
+      const ungroupBtn = document.createElement('button');
+      ungroupBtn.textContent = '×';
+      ungroupBtn.title = 'Delete this bucket';
+      ungroupBtn.addEventListener('click', () => {
+        const gi = state.colorGroups.indexOf(groupName);
+        if (gi !== -1) state.colorGroups.splice(gi, 1);
+        const hi = state.hiddenGroups.indexOf(groupName);
+        if (hi !== -1) state.hiddenGroups.splice(hi, 1);
+        state.fixedColors.forEach(fc => { if (fc.group === groupName) fc.group = ''; });
+        renderAll();
+      });
+      header.appendChild(ungroupBtn);
+
+      section.appendChild(header);
+      if (isHidden) section.classList.add('group-hidden');
+
+      const chipsWrap = document.createElement('div');
+      chipsWrap.className = 'pin-group-chips';
+      makeDropzone(chipsWrap, groupName);
+      state.fixedColors.forEach((fc, i) => {
+        if (fc.group === groupName) chipsWrap.appendChild(makePinChip(fc, i));
+      });
+      section.appendChild(chipsWrap);
+
+      list.appendChild(section);
     });
+
+    if (groups.length > 0) {
+      const ungroupedHeader = document.createElement('div');
+      ungroupedHeader.className = 'pin-group-header';
+      ungroupedHeader.textContent = 'Ungrouped';
+      list.appendChild(ungroupedHeader);
+    }
+
+    const ungroupedWrap = document.createElement('div');
+    ungroupedWrap.className = 'pin-group-chips';
+    makeDropzone(ungroupedWrap, '');
+    state.fixedColors.forEach((fc, i) => {
+      if (!fc.group) ungroupedWrap.appendChild(makePinChip(fc, i));
+    });
+    list.appendChild(ungroupedWrap);
   }
 
   function copyToClipboard(text) {
@@ -1002,12 +1266,23 @@
       return;
     }
     hexError.textContent = '';
-    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '' });
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '', group: '' });
     hexInput.value = '';
     renderAll();
   }
   document.getElementById('pinBtn').addEventListener('click', tryPin);
   hexInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPin(); });
+
+  const newGroupInput = document.getElementById('newGroupInput');
+  function tryAddGroup() {
+    const name = newGroupInput.value.trim();
+    if (!name || state.colorGroups.includes(name)) return;
+    state.colorGroups.push(name);
+    newGroupInput.value = '';
+    renderAll();
+  }
+  document.getElementById('addGroupBtn').addEventListener('click', tryAddGroup);
+  newGroupInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryAddGroup(); });
 
   // ---- freehand drawing canvas using picked colors as brushes ----
   const drawCanvas = document.getElementById('drawCanvas');
@@ -1030,7 +1305,7 @@
       const dot = document.createElement('div');
       dot.className = 'draw-swatch' + (fc.hex === drawColor ? ' selected' : '');
       dot.style.background = fc.hex;
-      dot.title = fc.name ? fc.name + ' — ' + fc.hex : fc.hex;
+      dot.title = fcTooltip(fc);
       dot.addEventListener('click', () => {
         drawColor = fc.hex;
         renderDrawPalette();
@@ -1111,7 +1386,7 @@
     const y = (clientY - rect.top) * scaleY;
     const [wheelHue, sat] = xyToHueSat(x, y);
     const rgb = wheelColorAt(wheelHue, sat, state.light);
-    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '' });
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '', group: '' });
     renderAll();
   }
 
@@ -1140,11 +1415,15 @@
       light: state.light,
       spread: state.spread,
       flip: state.flip,
-      fixedColors: state.fixedColors
+      fixedColors: state.fixedColors,
+      colorGroups: state.colorGroups,
+      hiddenGroups: state.hiddenGroups
     };
   }
 
   function applyState(saved) {
+    saved.colorGroups = saved.colorGroups || [];
+    saved.hiddenGroups = saved.hiddenGroups || [];
     Object.assign(state, saved);
     wheelTypeSelect.value = state.wheelType;
     hueSlider.value = state.baseHue;
