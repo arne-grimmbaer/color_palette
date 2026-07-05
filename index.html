@@ -1408,7 +1408,14 @@
 
   // ---- save / load configurations (localStorage) ----
   const SAVE_KEY = 'colorPaletteWheel.saves';
+  const LAST_SAVE_KEY = 'colorPaletteWheel.lastSave';
   let selectedSaveName = null;
+
+  function setSelectedSave(name) {
+    selectedSaveName = name;
+    if (name) localStorage.setItem(LAST_SAVE_KEY, name);
+    else localStorage.removeItem(LAST_SAVE_KEY);
+  }
 
   function loadSaves() {
     try {
@@ -1465,7 +1472,7 @@
     const list = document.getElementById('saveList');
     list.innerHTML = '';
     const saves = loadSaves();
-    if (selectedSaveName && !(selectedSaveName in saves)) selectedSaveName = null;
+    if (selectedSaveName && !(selectedSaveName in saves)) setSelectedSave(null);
     renderUpdateRow();
     const names = Object.keys(saves).sort((a, b) => a.localeCompare(b));
     if (names.length === 0) {
@@ -1487,7 +1494,7 @@
         const s = loadSaves()[name];
         if (!s) return;
         applyState(s);
-        selectedSaveName = name;
+        setSelectedSave(name);
         renderSaveList();
       });
 
@@ -1509,7 +1516,7 @@
             current[newName] = current[name];
             delete current[name];
             persistSaves(current);
-            if (selectedSaveName === name) selectedSaveName = newName;
+            if (selectedSaveName === name) setSelectedSave(newName);
           }
           renderSaveList();
         };
@@ -1528,7 +1535,7 @@
         const current = loadSaves();
         delete current[name];
         persistSaves(current);
-        if (selectedSaveName === name) selectedSaveName = null;
+        if (selectedSaveName === name) setSelectedSave(null);
         renderSaveList();
       });
 
@@ -1547,7 +1554,7 @@
     saves[name] = snapshotState();
     persistSaves(saves);
     saveNameInput.value = '';
-    selectedSaveName = name;
+    setSelectedSave(name);
     renderSaveList();
   });
   saveNameInput.addEventListener('keydown', (e) => {
@@ -1708,6 +1715,12 @@
   window.addEventListener('touchend', pointerUp);
 
   // ---- init ----
+  const lastSaveName = localStorage.getItem(LAST_SAVE_KEY);
+  const lastSave = lastSaveName ? loadSaves()[lastSaveName] : null;
+  if (lastSave) {
+    applyState(lastSave);
+    selectedSaveName = lastSaveName;
+  }
   updateLightRange();
   drawWheel();
   renderAll();
