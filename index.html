@@ -204,6 +204,27 @@
     height: 16px;
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.3);
+    flex: 0 0 auto;
+  }
+  .pin-chip .name {
+    cursor: text;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pin-chip .name.placeholder {
+    color: var(--muted);
+  }
+  .pin-chip input.rename-inline {
+    width: 90px;
+    background: #0d0e12;
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    font-family: inherit;
   }
   .pin-chip button {
     background: none;
@@ -304,6 +325,37 @@
     border-radius: 8px;
     padding: 6px 8px;
   }
+  .save-item.selected {
+    border-color: var(--accent);
+    background: rgba(108,140,255,0.1);
+  }
+  .update-row {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .update-row.visible { display: flex; }
+  .update-row .current-name {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .update-row button {
+    background: #14151a;
+    border: 1px solid var(--accent);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .update-row button:hover { background: rgba(108,140,255,0.12); }
   .save-item .name {
     flex: 1;
     font-size: 0.85rem;
@@ -464,6 +516,10 @@
 
     <div class="field">
       <label>Save configuration</label>
+      <div class="update-row" id="updateRow">
+        <span>Editing <span class="current-name" id="updateRowName"></span></span>
+        <button id="updateBtn">Update</button>
+      </div>
       <div class="save-row">
         <input type="text" id="saveNameInput" placeholder="Name this palette">
         <button id="saveBtn">Save</button>
@@ -588,6 +644,11 @@
 
   function rgbToHex([r, g, b]) {
     return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   function hexToRgb(hex) {
@@ -821,7 +882,7 @@
       el.style.left = x + 'px';
       el.style.top = y + 'px';
       el.style.background = fc.hex;
-      el.title = 'Fixed: ' + fc.hex;
+      el.title = (fc.name ? fc.name + ' — ' : '') + fc.hex;
       markersEl.appendChild(el);
     });
   }
@@ -852,7 +913,7 @@
         <div class="chip" style="background:${fc.hex}"></div>
         <button class="remove" title="Remove">&times;</button>
         <div class="info">
-          <div class="role">Fixed</div>
+          <div class="role">${escapeHtml(fc.name) || 'Fixed'}</div>
           <div class="hex">${fc.hex}</div>
         </div>`;
       el.querySelector('.chip').addEventListener('click', () => copyToClipboard(fc.hex));
@@ -871,11 +932,45 @@
     state.fixedColors.forEach((fc, i) => {
       const chip = document.createElement('div');
       chip.className = 'pin-chip';
-      chip.innerHTML = `<span class="dot" style="background:${fc.hex}"></span>${fc.hex}<button title="Remove">&times;</button>`;
-      chip.querySelector('button').addEventListener('click', () => {
+
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = fc.hex;
+      chip.appendChild(dot);
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'name' + (fc.name ? '' : ' placeholder');
+      nameEl.textContent = fc.name || fc.hex;
+      nameEl.title = 'Click to name this color';
+      nameEl.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.className = 'rename-inline';
+        input.value = fc.name || '';
+        input.placeholder = fc.hex;
+        chip.replaceChild(input, nameEl);
+        input.focus();
+        input.select();
+        const commit = () => {
+          fc.name = input.value.trim();
+          renderAll();
+        };
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') renderAll();
+        });
+        input.addEventListener('blur', commit);
+      });
+      chip.appendChild(nameEl);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
         state.fixedColors.splice(i, 1);
         renderAll();
       });
+      chip.appendChild(removeBtn);
+
       list.appendChild(chip);
     });
   }
@@ -907,7 +1002,7 @@
       return;
     }
     hexError.textContent = '';
-    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2] });
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '' });
     hexInput.value = '';
     renderAll();
   }
@@ -935,7 +1030,7 @@
       const dot = document.createElement('div');
       dot.className = 'draw-swatch' + (fc.hex === drawColor ? ' selected' : '');
       dot.style.background = fc.hex;
-      dot.title = fc.hex;
+      dot.title = fc.name ? fc.name + ' — ' + fc.hex : fc.hex;
       dot.addEventListener('click', () => {
         drawColor = fc.hex;
         renderDrawPalette();
@@ -1016,12 +1111,13 @@
     const y = (clientY - rect.top) * scaleY;
     const [wheelHue, sat] = xyToHueSat(x, y);
     const rgb = wheelColorAt(wheelHue, sat, state.light);
-    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2] });
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '' });
     renderAll();
   }
 
   // ---- save / load configurations (localStorage) ----
   const SAVE_KEY = 'colorPaletteWheel.saves';
+  let selectedSaveName = null;
 
   function loadSaves() {
     try {
@@ -1062,10 +1158,20 @@
     renderAll();
   }
 
+  function renderUpdateRow() {
+    const row = document.getElementById('updateRow');
+    const nameSpan = document.getElementById('updateRowName');
+    const visible = selectedSaveName && selectedSaveName in loadSaves();
+    row.classList.toggle('visible', !!visible);
+    nameSpan.textContent = visible ? selectedSaveName : '';
+  }
+
   function renderSaveList() {
     const list = document.getElementById('saveList');
     list.innerHTML = '';
     const saves = loadSaves();
+    if (selectedSaveName && !(selectedSaveName in saves)) selectedSaveName = null;
+    renderUpdateRow();
     const names = Object.keys(saves).sort((a, b) => a.localeCompare(b));
     if (names.length === 0) {
       const empty = document.createElement('div');
@@ -1076,7 +1182,7 @@
     }
     names.forEach(name => {
       const item = document.createElement('div');
-      item.className = 'save-item';
+      item.className = 'save-item' + (name === selectedSaveName ? ' selected' : '');
 
       const nameEl = document.createElement('div');
       nameEl.className = 'name';
@@ -1084,7 +1190,10 @@
       nameEl.title = 'Load "' + name + '"';
       nameEl.addEventListener('click', () => {
         const s = loadSaves()[name];
-        if (s) applyState(s);
+        if (!s) return;
+        applyState(s);
+        selectedSaveName = name;
+        renderSaveList();
       });
 
       const renameBtn = document.createElement('button');
@@ -1105,6 +1214,7 @@
             current[newName] = current[name];
             delete current[name];
             persistSaves(current);
+            if (selectedSaveName === name) selectedSaveName = newName;
           }
           renderSaveList();
         };
@@ -1123,6 +1233,7 @@
         const current = loadSaves();
         delete current[name];
         persistSaves(current);
+        if (selectedSaveName === name) selectedSaveName = null;
         renderSaveList();
       });
 
@@ -1141,10 +1252,20 @@
     saves[name] = snapshotState();
     persistSaves(saves);
     saveNameInput.value = '';
+    selectedSaveName = name;
     renderSaveList();
   });
   saveNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('saveBtn').click();
+  });
+
+  document.getElementById('updateBtn').addEventListener('click', () => {
+    if (!selectedSaveName) return;
+    const saves = loadSaves();
+    if (!(selectedSaveName in saves)) return;
+    saves[selectedSaveName] = snapshotState();
+    persistSaves(saves);
+    renderSaveList();
   });
 
   // ---- UI wiring ----
