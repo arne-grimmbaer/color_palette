@@ -234,6 +234,10 @@
     cursor: grab;
   }
   .pin-chip.dragging { opacity: 0.4; }
+  .pin-chip.chip-highlight {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
   .pin-chip .dot {
     width: 16px;
     height: 16px;
@@ -383,6 +387,10 @@
     cursor: pointer;
   }
   .draw-swatch.selected { border-color: var(--accent); }
+  .draw-swatch.chip-highlight {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
   .draw-empty {
     color: var(--muted);
     font-size: 0.78rem;
@@ -1093,9 +1101,20 @@
     });
   }
 
+  function setPinChipHighlight(fcIndex, on) {
+    const el = document.querySelector(`#pinList .pin-chip[data-fc-index="${fcIndex}"]`);
+    if (el) el.classList.toggle('chip-highlight', on);
+  }
+
+  function setDrawSwatchHighlight(fcIndex, on) {
+    const el = document.querySelector(`#drawPalette .draw-swatch[data-fc-index="${fcIndex}"]`);
+    if (el) el.classList.toggle('chip-highlight', on);
+  }
+
   function makePinChip(fc, i) {
     const chip = document.createElement('div');
     chip.className = 'pin-chip';
+    chip.dataset.fcIndex = String(i);
     chip.draggable = true;
     chip.addEventListener('dragstart', (e) => {
       draggedIndex = i;
@@ -1107,8 +1126,14 @@
       chip.classList.remove('dragging');
       draggedIndex = null;
     });
-    chip.addEventListener('mouseenter', () => setMarkerHighlight(i, true));
-    chip.addEventListener('mouseleave', () => setMarkerHighlight(i, false));
+    chip.addEventListener('mouseenter', () => {
+      setMarkerHighlight(i, true);
+      setDrawSwatchHighlight(i, true);
+    });
+    chip.addEventListener('mouseleave', () => {
+      setMarkerHighlight(i, false);
+      setDrawSwatchHighlight(i, false);
+    });
 
     const dot = document.createElement('span');
     dot.className = 'dot';
@@ -1349,14 +1374,18 @@
       return;
     }
     visible.forEach(fc => {
+      const fcIndex = state.fixedColors.indexOf(fc);
       const dot = document.createElement('div');
       dot.className = 'draw-swatch' + (fc.hex === drawColor ? ' selected' : '');
+      dot.dataset.fcIndex = String(fcIndex);
       dot.style.background = fc.hex;
       dot.title = fcTooltip(fc);
       dot.addEventListener('click', () => {
         drawColor = fc.hex;
         renderDrawPalette();
       });
+      dot.addEventListener('mouseenter', () => setPinChipHighlight(fcIndex, true));
+      dot.addEventListener('mouseleave', () => setPinChipHighlight(fcIndex, false));
       wrap.appendChild(dot);
     });
   }
