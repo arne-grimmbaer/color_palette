@@ -188,7 +188,7 @@
     cursor: crosshair;
     box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.4);
   }
-  svg#mask {
+  svg#mask, canvas#hclMask {
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -745,6 +745,7 @@
     <div class="wheel-title" style="margin-top: 6px;">HCL Plot</div>
     <div class="hcl-wrap" id="hclWrap">
       <canvas id="hclWheel" width="320" height="196"></canvas>
+      <canvas id="hclMask" width="320" height="196"></canvas>
       <div id="hclMarkers"></div>
       <div id="hclMarker" class="hcl-marker"></div>
       <div id="hclXLabels"></div>
@@ -1179,6 +1180,76 @@
     if (el) el.classList.toggle('hcl-marker-highlight', on);
   }
 
+  // ---- harmony mask, mapped into the current HCL slice ----
+  // The harmony mask is a region of (wheelHue, sat) on the artistic wheel.
+  // For the 2D slice the HCL plot currently shows, we test *every pixel* of
+  // that slice: convert it to LCh -> RGB -> the wheel's own hue/sat, then
+  // check whether that hue/sat falls inside the mask. This is the inverse of
+  // drawHclWheel's per-pixel LCh->RGB coloring, so the shape correctly
+  // depends on whichever HCL dimension is currently fixed (L, C, or H) --
+  // e.g. sweeping the Hue slider in H-fixed mode changes which (Chroma,
+  // Lightness) points are "inside" the mask.
+  const hclMaskCanvas = document.getElementById('hclMask');
+  const hclMaskCtx = hclMaskCanvas.getContext('2d');
+
+  function angularDist(a, b) {
+    return Math.abs(((a - b + 540) % 360) - 180);
+  }
+
+  function pointInTriangle(px, py, verts) {
+    const [[x0, y0], [x1, y1], [x2, y2]] = verts;
+    const d1 = (px - x1) * (y0 - y1) - (x0 - x1) * (py - y1);
+    const d2 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+    const d3 = (px - x0) * (y2 - y0) - (x2 - x0) * (py - y0);
+    const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+    const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(hasNeg && hasPos);
+  }
+
+  function wheelPointInMask(wheelHue, sat) {
+    const hues = currentHarmonyHues();
+    if (state.mode === 'rightTriangle') {
+      const verts = hues.map(h => hueSatToXY(h.wheelHue, state.sat));
+      const [x, y] = hueSatToXY(wheelHue, sat);
+      return pointInTriangle(x, y, verts);
+    }
+    const sectorWidth = state.mode === 'analogous' || state.mode === 'splitComplementary' ? 12 : 10;
+    return hues.some(h => angularDist(wheelHue, h.wheelHue) <= sectorWidth);
+  }
+
+  function renderHclMask() {
+    const cfg = hclSliceConfig();
+    const xInfo = HCL_DIM_INFO[cfg.x], yInfo = HCL_DIM_INFO[cfg.y];
+    const inside = new Uint8Array(HCL_W * HCL_H);
+    for (let py = 0; py < HCL_H; py++) {
+      const yVal = yInfo.min + ((HCL_H - py) / HCL_H) * (yInfo.max - yInfo.min);
+      for (let px = 0; px < HCL_W; px++) {
+        const xVal = xInfo.min + (px / HCL_W) * (xInfo.max - xInfo.min);
+        const [L, C, H] = hclLchFor(xVal, yVal);
+        const { rgb, inGamut } = hclLchToRgb(L, C, H);
+        if (!inGamut) continue;
+        const [hue, sat] = modelHueSat(rgb[0], rgb[1], rgb[2]);
+        const wheelHue = hsvHueToWheelHue(hue);
+        if (wheelPointInMask(wheelHue, sat)) inside[py * HCL_W + px] = 1;
+      }
+    }
+    const img = hclMaskCtx.createImageData(HCL_W, HCL_H);
+    const data = img.data;
+    for (let py = 0; py < HCL_H; py++) {
+      for (let px = 0; px < HCL_W; px++) {
+        const idx = py * HCL_W + px;
+        if (!inside[idx]) continue;
+        const edge =
+          px === 0 || py === 0 || px === HCL_W - 1 || py === HCL_H - 1 ||
+          !inside[idx - 1] || !inside[idx + 1] || !inside[idx - HCL_W] || !inside[idx + HCL_W];
+        const o = idx * 4;
+        data[o] = 255; data[o + 1] = 255; data[o + 2] = 255;
+        data[o + 3] = edge ? 235 : 28;
+      }
+    }
+    hclMaskCtx.putImageData(img, 0, 0);
+  }
+
   function renderHclAxisLabels() {
     const cfg = hclSliceConfig();
     const xInfo = HCL_DIM_INFO[cfg.x], yInfo = HCL_DIM_INFO[cfg.y];
@@ -1222,7 +1293,10 @@
   }
 
   function onHclDimChange(dim) {
-    if (dim === hclSliceConfig().fixed) drawHclWheel();
+    if (dim === hclSliceConfig().fixed) {
+      drawHclWheel();
+      renderHclMask();
+    }
     renderHclMarker();
   }
   function setHclL(L) {
@@ -1253,6 +1327,7 @@
       drawHclWheel();
       renderHclMarker();
       renderHclFixedMarkers();
+      renderHclMask();
     });
   });
 
@@ -1718,6 +1793,7 @@
     renderMask();
     renderMarkers();
     renderHclFixedMarkers();
+    renderHclMask();
     renderSwatches();
     renderPinList();
     renderDrawPalette();
