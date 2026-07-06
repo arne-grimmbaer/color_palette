@@ -589,14 +589,20 @@
     background: rgba(108,140,255,0.1);
   }
   .update-row {
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     font-size: 0.8rem;
     color: var(--muted);
   }
-  .update-row.visible { display: flex; }
+  .update-row .update-info {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .update-row.visible .update-info { display: flex; }
   .update-row .current-name {
     color: var(--text);
     overflow: hidden;
@@ -841,8 +847,11 @@
     <div class="field">
       <label>Save configuration</label>
       <div class="update-row" id="updateRow">
-        <span>Editing <span class="current-name" id="updateRowName"></span></span>
-        <button id="updateBtn">Update</button>
+        <div class="update-info">
+          <span>Editing <span class="current-name" id="updateRowName"></span></span>
+          <button id="updateBtn">Update</button>
+        </div>
+        <button id="exportPickedBtn" title="Export picked colors as JSON">Export</button>
       </div>
       <div class="save-row">
         <input type="text" id="saveNameInput" placeholder="Name this palette">
@@ -1865,6 +1874,28 @@
   }
   document.getElementById('addGroupBtn').addEventListener('click', tryAddGroup);
   newGroupInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryAddGroup(); });
+
+  function exportPickedColors() {
+    const toEntry = fc => ({ hex: fc.hex, name: fc.name || '' });
+    const orphanGroups = [...new Set(state.fixedColors.map(fc => fc.group).filter(Boolean))]
+      .filter(g => !state.colorGroups.includes(g))
+      .sort((a, b) => a.localeCompare(b));
+    const groups = state.colorGroups.concat(orphanGroups).map(groupName => ({
+      name: groupName,
+      colors: state.fixedColors.filter(fc => fc.group === groupName).map(toEntry)
+    }));
+    const ungrouped = state.fixedColors.filter(fc => !fc.group).map(toEntry);
+    const data = { groups, ungrouped };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'picked-colors.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById('exportPickedBtn').addEventListener('click', exportPickedColors);
 
   // ---- freehand drawing canvas using picked colors as brushes ----
   const drawCanvas = document.getElementById('drawCanvas');
