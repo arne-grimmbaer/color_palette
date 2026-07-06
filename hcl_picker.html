@@ -111,28 +111,20 @@
     box-shadow: 0 0 0 2px #000, 0 2px 8px rgba(0,0,0,0.6);
     pointer-events: none;
   }
-  .slice-radio-group {
-    display: flex;
-    gap: 14px;
-  }
-  .slice-radio-group label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.85rem;
-    color: var(--text);
-    cursor: pointer;
-  }
-  .slice-radio-group input[type=radio] {
-    accent-color: var(--accent);
-  }
   .field { width: 360px; }
   .field label {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.85rem;
     color: var(--muted);
     margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .field label .label-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .field label span.val {
     color: var(--text);
@@ -141,6 +133,10 @@
   input[type=range] {
     width: 100%;
     accent-color: var(--accent);
+  }
+  input[type=radio] {
+    accent-color: var(--accent);
+    cursor: pointer;
   }
 
   .controls {
@@ -231,14 +227,6 @@
 
 <div class="layout">
   <div class="wheel-panel">
-    <div class="field">
-      <label>Slice through</label>
-      <div class="slice-radio-group" id="sliceRadioGroup">
-        <label><input type="radio" name="sliceMode" value="L" checked> Lightness</label>
-        <label><input type="radio" name="sliceMode" value="C"> Chroma</label>
-        <label><input type="radio" name="sliceMode" value="H"> Hue</label>
-      </div>
-    </div>
     <div class="wheel-wrap" id="wheelWrap">
       <canvas id="wheel" width="360" height="220"></canvas>
       <div id="marker" class="marker"></div>
@@ -248,15 +236,15 @@
       <div class="axis-title y-title" id="yAxisTitle">Chroma (C*)</div>
     </div>
     <div class="field">
-      <label id="lightLabel">Lightness (L*) <span class="val" id="lightVal">60</span></label>
+      <label id="lightLabel"><span class="label-left"><input type="radio" name="sliceMode" value="L" checked> Lightness (L*)</span><span class="val" id="lightVal">60</span></label>
       <input type="range" id="lightness" min="0" max="100" value="60" step="0.5">
     </div>
     <div class="field">
-      <label id="chromaLabel">Chroma (C*) <span class="val" id="chromaVal">40</span></label>
+      <label id="chromaLabel"><span class="label-left"><input type="radio" name="sliceMode" value="C"> Chroma (C*)</span><span class="val" id="chromaVal">40</span></label>
       <input type="range" id="chroma" min="0" max="150" value="40" step="0.5">
     </div>
     <div class="field">
-      <label id="hueLabel">Hue (H&deg;) <span class="val" id="hueVal">0</span></label>
+      <label id="hueLabel"><span class="label-left"><input type="radio" name="sliceMode" value="H"> Hue (H&deg;)</span><span class="val" id="hueVal">0</span></label>
       <input type="range" id="hue" min="0" max="359.9" value="0" step="0.1">
     </div>
   </div>
@@ -534,7 +522,7 @@
   document.getElementById('chroma').addEventListener('input', e => setC(Number(e.target.value)));
   document.getElementById('hue').addEventListener('input', e => setH(Number(e.target.value)));
 
-  document.querySelectorAll('#sliceRadioGroup input[name=sliceMode]').forEach(radio => {
+  document.querySelectorAll('input[name=sliceMode]').forEach(radio => {
     radio.addEventListener('change', () => {
       if (!radio.checked) return;
       state.sliceMode = radio.value;
