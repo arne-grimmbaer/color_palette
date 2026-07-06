@@ -539,8 +539,7 @@
     const steps = 24;
     for (let i = 0; i <= steps; i++) {
       const H = (i / steps) * 360;
-      const { rgb } = lchToRgb(state.L, state.C, H);
-      stops.push(`rgb(${rgb.join(',')}) ${((i / steps) * 100).toFixed(2)}%`);
+      stops.push(`hsl(${H.toFixed(1)}, 100%, 50%) ${((i / steps) * 100).toFixed(2)}%`);
     }
     document.getElementById('hue').style.background = `linear-gradient(to right, ${stops.join(', ')})`;
   }
@@ -548,7 +547,6 @@
   function renderAll() {
     renderMarker();
     renderOutputs();
-    updateHueSliderBackground();
   }
 
   function onDimChange(dim) {
@@ -657,6 +655,7 @@
   renderAxisLabels();
   drawWheel();
   renderAll();
+  updateHueSliderBackground();
 })();
 </script>
 </body>
