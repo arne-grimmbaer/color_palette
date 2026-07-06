@@ -416,7 +416,7 @@
     padding: 0 2px;
   }
   .pin-chip button:hover { color: #ff8080; }
-  .pin-chip button.group-btn:hover { color: var(--accent); }
+  .pin-chip button.focus-btn:hover { color: var(--accent); }
   .pin-group {
     display: flex;
     flex-direction: column;
@@ -817,7 +817,6 @@
         <button id="addGroupBtn">+ Bucket</button>
       </div>
       <div class="pin-list" id="pinList"></div>
-      <datalist id="pinGroupOptions"></datalist>
 
       <div class="draw-wrap">
         <div class="draw-toolbar">
@@ -1546,16 +1545,6 @@
     });
   }
 
-  function renderPinGroupOptions() {
-    const dl = document.getElementById('pinGroupOptions');
-    dl.innerHTML = '';
-    state.colorGroups.forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g;
-      dl.appendChild(opt);
-    });
-  }
-
   let draggedIndex = null;
 
   function makeDropzone(el, groupName) {
@@ -1618,32 +1607,14 @@
     dot.style.background = fc.hex;
     chip.appendChild(dot);
 
-    const groupBtn = document.createElement('button');
-    groupBtn.className = 'group-btn';
-    groupBtn.textContent = '🏷';
-    groupBtn.title = fc.group ? `Group: ${fc.group} (click to change)` : 'Assign to a group';
-    groupBtn.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.className = 'rename-inline';
-      input.setAttribute('list', 'pinGroupOptions');
-      input.value = fc.group || '';
-      input.placeholder = 'Group name';
-      chip.replaceChild(input, groupBtn);
-      input.focus();
-      input.select();
-      const commit = () => {
-        const val = input.value.trim();
-        fc.group = val;
-        if (val && !state.colorGroups.includes(val)) state.colorGroups.push(val);
-        renderAll();
-      };
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') commit();
-        if (e.key === 'Escape') renderAll();
-      });
-      input.addEventListener('blur', commit);
+    const focusBtn = document.createElement('button');
+    focusBtn.className = 'focus-btn';
+    focusBtn.textContent = '⌖';
+    focusBtn.title = 'Focus this color on the HCL plot and lightness slider';
+    focusBtn.addEventListener('click', () => {
+      focusOnColor(fc);
     });
-    chip.appendChild(groupBtn);
+    chip.appendChild(focusBtn);
 
     const nameEl = document.createElement('span');
     nameEl.className = 'name' + (fc.name ? '' : ' placeholder');
@@ -1684,7 +1655,6 @@
   function renderPinList() {
     const list = document.getElementById('pinList');
     list.innerHTML = '';
-    renderPinGroupOptions();
 
     const orphanGroups = [...new Set(state.fixedColors.map(fc => fc.group).filter(Boolean))]
       .filter(g => !state.colorGroups.includes(g))
@@ -2199,6 +2169,24 @@
     drawWheel();
     renderAll();
   });
+
+  function focusOnColor(fc) {
+    const [L, C, H] = hclRgbToLch(fc.r, fc.g, fc.b);
+    hclState.L = L;
+    hclState.C = C;
+    hclState.H = H;
+    syncHclSliders();
+    drawHclWheel();
+    renderHclMask();
+    renderHclMarker();
+
+    const [, , light] = modelHueSat(fc.r, fc.g, fc.b);
+    state.light = Math.min(Number(lightSlider.max), Math.max(Number(lightSlider.min), Math.round(light)));
+    lightSlider.value = state.light;
+    document.getElementById('lightVal').textContent = state.light + '%';
+    drawWheel();
+    renderAll();
+  }
 
   const hueSlider = document.getElementById('hueSlider');
   hueSlider.addEventListener('input', () => {
