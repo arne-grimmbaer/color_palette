@@ -194,6 +194,10 @@
     inset: 0;
     pointer-events: none;
   }
+  svg#mask {
+    border-radius: 50%;
+    overflow: hidden;
+  }
   .marker {
     position: absolute;
     width: 18px;
@@ -1264,16 +1268,36 @@
     }
     const img = hclMaskCtx.createImageData(HCL_W, HCL_H);
     const data = img.data;
-    for (let py = 0; py < HCL_H; py++) {
-      for (let px = 0; px < HCL_W; px++) {
-        const idx = py * HCL_W + px;
-        if (!inside[idx]) continue;
-        const edge =
-          px === 0 || py === 0 || px === HCL_W - 1 || py === HCL_H - 1 ||
-          !inside[idx - 1] || !inside[idx + 1] || !inside[idx - HCL_W] || !inside[idx + HCL_W];
-        const o = idx * 4;
-        data[o] = 255; data[o + 1] = 255; data[o + 2] = 255;
-        data[o + 3] = edge ? 235 : 28;
+    if (state.locked) {
+      // Invert the selection: tint everything *outside* the harmony region
+      // magenta, leaving the relevant (inside) area showing its true LCh
+      // colors untouched underneath.
+      for (let py = 0; py < HCL_H; py++) {
+        for (let px = 0; px < HCL_W; px++) {
+          const idx = py * HCL_W + px;
+          if (inside[idx]) continue;
+          const edge =
+            px === 0 || py === 0 || px === HCL_W - 1 || py === HCL_H - 1 ||
+            inside[idx - 1] || inside[idx + 1] || inside[idx - HCL_W] || inside[idx + HCL_W];
+          const o = idx * 4;
+          data[o] = 255; data[o + 1] = 0; data[o + 2] = 255;
+          data[o + 3] = edge ? 235 : 179;
+        }
+      }
+    } else {
+      // Unlocked: just highlight the harmony region itself with a faint
+      // white fill and a bright white outline.
+      for (let py = 0; py < HCL_H; py++) {
+        for (let px = 0; px < HCL_W; px++) {
+          const idx = py * HCL_W + px;
+          if (!inside[idx]) continue;
+          const edge =
+            px === 0 || py === 0 || px === HCL_W - 1 || py === HCL_H - 1 ||
+            !inside[idx - 1] || !inside[idx + 1] || !inside[idx - HCL_W] || !inside[idx + HCL_W];
+          const o = idx * 4;
+          data[o] = 255; data[o + 1] = 255; data[o + 2] = 255;
+          data[o + 3] = edge ? 235 : 28;
+        }
       }
     }
     hclMaskCtx.putImageData(img, 0, 0);
@@ -1492,31 +1516,73 @@
     return `M ${center} ${center} L ${x0} ${y0} A ${radius} ${radius} 0 ${largeArc} 1 ${x1} ${y1} Z`;
   }
 
+  function fullCirclePathD() {
+    // A couple of px larger than the wheel's own radius: the canvas paints
+    // its disc with a hard per-pixel cutoff (no antialiasing), so a
+    // same-radius SVG circle's smooth antialiased edge lets flecks of the
+    // canvas's jagged boundary pixels peek through. Overshooting is safe
+    // because svg#mask is itself clipped to a circle via CSS.
+    const r = radius + 2;
+    return `M ${center - r} ${center} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 Z`;
+  }
+
+  // While unlocked, just outline the harmony shape with a faint white fill
+  // (the classic "highlight" look) so it reads as a preview while dragging.
+  // Once locked, invert the selection instead: tint everything *outside* the
+  // harmony region magenta (combining the full circle with the harmony shape
+  // into one evenodd path cancels the fill inside the shape), leaving the
+  // relevant area showing its true wheel colors untouched underneath.
   function renderMask() {
     maskSvg.innerHTML = '';
     const hues = currentHarmonyHues();
 
     if (state.mode === 'rightTriangle') {
       const pts = hues.map(h => hueSatToXY(h.wheelHue, state.sat));
-      const d = `M ${pts[0][0]} ${pts[0][1]} L ${pts[1][0]} ${pts[1][1]} L ${pts[2][0]} ${pts[2][1]} Z`;
+      const shapeD = `M ${pts[0][0]} ${pts[0][1]} L ${pts[1][0]} ${pts[1][1]} L ${pts[2][0]} ${pts[2][1]} Z`;
+
+      if (state.locked) {
+        const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        fillPath.setAttribute('d', fullCirclePathD() + ' ' + shapeD);
+        fillPath.setAttribute('fill-rule', 'evenodd');
+        fillPath.setAttribute('fill', 'rgba(255,0,255,0.7)');
+        maskSvg.appendChild(fillPath);
+      }
+
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', d);
-      path.setAttribute('fill', 'rgba(255,255,255,0.12)');
-      path.setAttribute('stroke', 'rgba(255,255,255,0.7)');
+      path.setAttribute('d', shapeD);
+      path.setAttribute('fill', state.locked ? 'none' : 'rgba(255,255,255,0.12)');
+      path.setAttribute('stroke', state.locked ? 'rgba(255,0,255,0.9)' : 'rgba(255,255,255,0.7)');
       path.setAttribute('stroke-width', '2');
       maskSvg.appendChild(path);
       return;
     }
 
     const sectorWidth = state.mode === 'analogous' || state.mode === 'splitComplementary' ? 12 : 10;
-    hues.forEach(h => {
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', svgSectorPath(h.wheelHue, sectorWidth));
-      path.setAttribute('fill', h.isBase ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.14)');
-      path.setAttribute('stroke', 'rgba(255,255,255,0.6)');
-      path.setAttribute('stroke-width', '1.5');
-      maskSvg.appendChild(path);
-    });
+    const shapeD = hues.map(h => svgSectorPath(h.wheelHue, sectorWidth)).join(' ');
+
+    if (state.locked) {
+      const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      fillPath.setAttribute('d', fullCirclePathD() + ' ' + shapeD);
+      fillPath.setAttribute('fill-rule', 'evenodd');
+      fillPath.setAttribute('fill', 'rgba(255,0,255,0.7)');
+      maskSvg.appendChild(fillPath);
+
+      const strokePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      strokePath.setAttribute('d', shapeD);
+      strokePath.setAttribute('fill', 'none');
+      strokePath.setAttribute('stroke', 'rgba(255,0,255,0.9)');
+      strokePath.setAttribute('stroke-width', '1.5');
+      maskSvg.appendChild(strokePath);
+    } else {
+      hues.forEach(h => {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', svgSectorPath(h.wheelHue, sectorWidth));
+        path.setAttribute('fill', h.isBase ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.14)');
+        path.setAttribute('stroke', 'rgba(255,255,255,0.6)');
+        path.setAttribute('stroke-width', '1.5');
+        maskSvg.appendChild(path);
+      });
+    }
   }
 
   function renderMarkers() {
@@ -1999,6 +2065,7 @@
     lockBtn.textContent = state.locked
       ? '🔓 Unlock shape'
       : '🔒 Lock shape (click wheel to pick colors)';
+    renderAll();
   });
 
   function pickColorAt(clientX, clientY) {
