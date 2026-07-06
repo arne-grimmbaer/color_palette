@@ -138,6 +138,47 @@
     accent-color: var(--accent);
     cursor: pointer;
   }
+  input#hue {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    cursor: pointer;
+  }
+  input#hue::-webkit-slider-runnable-track {
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+  }
+  input#hue::-moz-range-track {
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+  }
+  input#hue::-moz-range-progress {
+    background: transparent;
+  }
+  input#hue::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 4px;
+    height: 28px;
+    border-radius: 2px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.6);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  input#hue::-moz-range-thumb {
+    width: 4px;
+    height: 28px;
+    border-radius: 2px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.6);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
 
   .controls {
     background: var(--panel);
@@ -493,9 +534,21 @@
     document.getElementById('hueVal').textContent = state.H.toFixed(1);
   }
 
+  function updateHueSliderBackground() {
+    const stops = [];
+    const steps = 24;
+    for (let i = 0; i <= steps; i++) {
+      const H = (i / steps) * 360;
+      const { rgb } = lchToRgb(state.L, state.C, H);
+      stops.push(`rgb(${rgb.join(',')}) ${((i / steps) * 100).toFixed(2)}%`);
+    }
+    document.getElementById('hue').style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+  }
+
   function renderAll() {
     renderMarker();
     renderOutputs();
+    updateHueSliderBackground();
   }
 
   function onDimChange(dim) {
