@@ -784,16 +784,26 @@
           <div class="harmony-btn" data-mode="rightTriangle">Right Triangle</div>
         </div>
 
-        <div class="field" id="spreadField">
-          <label id="spreadLabel">Spread <span class="val" id="spreadVal">30°</span></label>
-          <input type="range" id="spread" min="10" max="60" value="30">
-        </div>
-
         <div class="field" id="flipField">
           <label>Orientation</label>
           <div class="harmony-btn" id="flipBtn" style="text-align:center;">Flip</div>
         </div>
+
+        <div class="field" id="spreadField">
+          <label id="spreadLabel">Spread <span class="val" id="spreadVal">30°</span></label>
+          <input type="range" id="spread" min="10" max="60" value="30">
+        </div>
       </div>
+    </div>
+
+    <div class="field">
+      <label>Base hue <span class="val" id="hueVal">0°</span></label>
+      <input type="range" id="hueSlider" min="0" max="359" value="0">
+    </div>
+
+    <div class="field">
+      <label>Saturation <span class="val" id="satVal">100%</span></label>
+      <input type="range" id="satSlider" min="0" max="100" value="100">
     </div>
 
     <div class="field">
@@ -839,16 +849,6 @@
         <button id="saveBtn">Save</button>
       </div>
       <div class="save-list" id="saveList"></div>
-    </div>
-
-    <div class="field">
-      <label>Base hue <span class="val" id="hueVal">0°</span></label>
-      <input type="range" id="hueSlider" min="0" max="359" value="0">
-    </div>
-
-    <div class="field">
-      <label>Saturation <span class="val" id="satVal">100%</span></label>
-      <input type="range" id="satSlider" min="0" max="100" value="100">
     </div>
   </div>
 </div>
