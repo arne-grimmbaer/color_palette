@@ -65,6 +65,7 @@
     height: 196px;
     margin-left: 26px;
     margin-bottom: 16px;
+    cursor: crosshair;
   }
   canvas#hclWheel {
     position: absolute;
@@ -1125,6 +1126,14 @@
     return [values.L, values.C, values.H];
   }
 
+  function hclXYToValues(x, y) {
+    const cfg = hclSliceConfig();
+    const xInfo = HCL_DIM_INFO[cfg.x], yInfo = HCL_DIM_INFO[cfg.y];
+    const xVal = xInfo.min + (x / HCL_W) * (xInfo.max - xInfo.min);
+    const yVal = yInfo.min + ((HCL_H - y) / HCL_H) * (yInfo.max - yInfo.min);
+    return [xVal, yVal];
+  }
+
   function drawHclWheel() {
     const cfg = hclSliceConfig();
     const xInfo = HCL_DIM_INFO[cfg.x], yInfo = HCL_DIM_INFO[cfg.y];
@@ -1335,6 +1344,35 @@
       renderHclFixedMarkers();
       renderHclMask();
     });
+  });
+
+  // ---- hover to move the HCL selector, click to pin the color ----
+  const hclWrapEl = document.getElementById('hclWrap');
+  function hclEventXY(e) {
+    const rect = hclWrapEl.getBoundingClientRect();
+    const scaleX = HCL_W / rect.width;
+    const scaleY = HCL_H / rect.height;
+    const x = Math.min(HCL_W, Math.max(0, (e.clientX - rect.left) * scaleX));
+    const y = Math.min(HCL_H, Math.max(0, (e.clientY - rect.top) * scaleY));
+    return [x, y];
+  }
+  hclWrapEl.addEventListener('mousemove', (e) => {
+    const [x, y] = hclEventXY(e);
+    const [xVal, yVal] = hclXYToValues(x, y);
+    const cfg = hclSliceConfig();
+    hclState[cfg.x] = xVal;
+    hclState[cfg.y] = yVal;
+    syncHclSliders();
+    renderHclMarker();
+  });
+  hclWrapEl.addEventListener('click', (e) => {
+    const [x, y] = hclEventXY(e);
+    const [xVal, yVal] = hclXYToValues(x, y);
+    const [L, C, H] = hclLchFor(xVal, yVal);
+    const { rgb, inGamut } = hclLchToRgb(L, C, H);
+    if (!inGamut) return;
+    state.fixedColors.push({ hex: rgbToHex(rgb), r: rgb[0], g: rgb[1], b: rgb[2], name: '', group: '' });
+    renderAll();
   });
 
   // ---- render color wheel via pixel buffer ----
