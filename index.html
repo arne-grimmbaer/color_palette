@@ -878,8 +878,13 @@
     locked: false,   // when true, wheel clicks pick a color instead of moving the shape
     fixedColors: [], // [{hex,r,g,b,hue,sat,light}] -- hue/sat/light are the real HSL of the hex
     colorGroups: [], // names of buckets that fixedColors[i].group can reference, in creation order
-    hiddenGroups: [] // names of groups whose fixedColors markers are hidden from the wheel
+    hiddenGroups: [], // names of groups whose fixedColors markers are hidden from the wheel
+    hideUngrouped: false // when true, ungrouped fixedColors markers are hidden from the wheel
   };
+
+  function isFcHidden(fc) {
+    return fc.group ? state.hiddenGroups.includes(fc.group) : state.hideUngrouped;
+  }
 
   // ---- RYB (artist wheel) <-> HSV hue remap via piecewise-linear anchors ----
   // wheel-space angle -> real HSV hue
@@ -1172,7 +1177,7 @@
     hclMarkersEl.innerHTML = '';
     const cfg = hclSliceConfig();
     state.fixedColors.forEach((fc, i) => {
-      if (fc.group && state.hiddenGroups.includes(fc.group)) return;
+      if (isFcHidden(fc)) return;
       const [L, C, H] = hclRgbToLch(fc.r, fc.g, fc.b);
       const values = { L, C, H };
       const [x, y] = hclValuesToXY(values[cfg.x], values[cfg.y]);
@@ -1522,7 +1527,7 @@
     });
 
     state.fixedColors.forEach((fc, i) => {
-      if (fc.group && state.hiddenGroups.includes(fc.group)) return;
+      if (isFcHidden(fc)) return;
       const [hue, sat] = modelHueSat(fc.r, fc.g, fc.b);
       const wheelHue = hsvHueToWheelHue(hue);
       const [x, y] = hueSatToXY(wheelHue, sat);
@@ -1779,12 +1784,29 @@
       list.appendChild(section);
     });
 
-    if (groups.length > 0) {
-      const ungroupedHeader = document.createElement('div');
-      ungroupedHeader.className = 'pin-group-header';
-      ungroupedHeader.textContent = 'Ungrouped';
-      list.appendChild(ungroupedHeader);
-    }
+    const ungroupedSection = document.createElement('div');
+    ungroupedSection.className = 'pin-group';
+    if (state.hideUngrouped) ungroupedSection.classList.add('group-hidden');
+
+    const ungroupedHeader = document.createElement('div');
+    ungroupedHeader.className = 'pin-group-header';
+
+    const ungroupedName = document.createElement('span');
+    ungroupedName.className = 'gname';
+    ungroupedName.textContent = 'Ungrouped';
+    ungroupedHeader.appendChild(ungroupedName);
+
+    const ungroupedHideBtn = document.createElement('button');
+    ungroupedHideBtn.className = 'hide-btn';
+    ungroupedHideBtn.textContent = state.hideUngrouped ? '🙈' : '👁';
+    ungroupedHideBtn.title = state.hideUngrouped ? 'Show ungrouped colors on the wheel' : 'Hide ungrouped colors from the wheel';
+    ungroupedHideBtn.addEventListener('click', () => {
+      state.hideUngrouped = !state.hideUngrouped;
+      renderAll();
+    });
+    ungroupedHeader.appendChild(ungroupedHideBtn);
+
+    ungroupedSection.appendChild(ungroupedHeader);
 
     const ungroupedWrap = document.createElement('div');
     ungroupedWrap.className = 'pin-group-chips';
@@ -1792,7 +1814,9 @@
     state.fixedColors.forEach((fc, i) => {
       if (!fc.group) ungroupedWrap.appendChild(makePinChip(fc, i));
     });
-    list.appendChild(ungroupedWrap);
+    ungroupedSection.appendChild(ungroupedWrap);
+
+    list.appendChild(ungroupedSection);
   }
 
   function copyToClipboard(text) {
@@ -1852,7 +1876,7 @@
   function renderDrawPalette() {
     const wrap = document.getElementById('drawPalette');
     wrap.innerHTML = '';
-    const visible = state.fixedColors.filter(fc => !(fc.group && state.hiddenGroups.includes(fc.group)));
+    const visible = state.fixedColors.filter(fc => !isFcHidden(fc));
     if (visible.length === 0) {
       const msg = document.createElement('div');
       msg.className = 'draw-empty';
@@ -1992,13 +2016,15 @@
       flip: state.flip,
       fixedColors: state.fixedColors,
       colorGroups: state.colorGroups,
-      hiddenGroups: state.hiddenGroups
+      hiddenGroups: state.hiddenGroups,
+      hideUngrouped: state.hideUngrouped
     };
   }
 
   function applyState(saved) {
     saved.colorGroups = saved.colorGroups || [];
     saved.hiddenGroups = saved.hiddenGroups || [];
+    saved.hideUngrouped = saved.hideUngrouped || false;
     Object.assign(state, saved);
     wheelTypeSelect.value = state.wheelType;
     hueSlider.value = state.baseHue;
