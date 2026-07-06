@@ -229,6 +229,24 @@
     box-shadow: 0 0 0 2px var(--accent), 0 0 10px 2px var(--accent);
     z-index: 5;
   }
+  .hcl-marker.fixed {
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 0;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5);
+    transform: rotate(45deg);
+    transition: transform 0.15s, box-shadow 0.15s;
+    pointer-events: none;
+  }
+  .hcl-marker.fixed.hcl-marker-highlight {
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    box-shadow: 0 0 0 2px var(--accent), 0 0 10px 2px var(--accent);
+    z-index: 5;
+  }
 
   .controls {
     background: var(--panel);
@@ -724,9 +742,10 @@
       <label id="lightLabel">Lightness <span class="val" id="lightVal">50%</span></label>
       <input type="range" id="lightness" min="10" max="90" value="50">
     </div>
-    <div class="wheel-title" style="margin-top: 6px;">HCL Wheel</div>
+    <div class="wheel-title" style="margin-top: 6px;">HCL Plot</div>
     <div class="hcl-wrap" id="hclWrap">
       <canvas id="hclWheel" width="320" height="196"></canvas>
+      <div id="hclMarkers"></div>
       <div id="hclMarker" class="hcl-marker"></div>
       <div id="hclXLabels"></div>
       <div id="hclYLabels"></div>
@@ -1066,6 +1085,27 @@
     const clamp = v => Math.round(Math.min(1, Math.max(0, v)) * 255);
     return { rgb: [clamp(r), clamp(g), clamp(bch)], inGamut };
   }
+  function hclFLab(t) {
+    return t > HCL_DELTA ** 3 ? Math.cbrt(t) : t / (3 * HCL_DELTA ** 2) + 4 / 29;
+  }
+  function hclRgbToXyz(r, g, b) {
+    const rl = hclSrgbToLinear(r), gl = hclSrgbToLinear(g), bl = hclSrgbToLinear(b);
+    const x = 0.4124564 * rl + 0.3575761 * gl + 0.1804375 * bl;
+    const y = 0.2126729 * rl + 0.7151522 * gl + 0.0721750 * bl;
+    const z = 0.0193339 * rl + 0.1191920 * gl + 0.9503041 * bl;
+    return [x, y, z];
+  }
+  function hclRgbToLch(r, g, b) {
+    const [x, y, z] = hclRgbToXyz(r, g, b);
+    const fx = hclFLab(x / HCL_Xn), fy = hclFLab(y / HCL_Yn), fz = hclFLab(z / HCL_Zn);
+    const L = 116 * fy - 16;
+    const a = 500 * (fx - fy);
+    const bb = 200 * (fy - fz);
+    const C = Math.sqrt(a * a + bb * bb);
+    let H = Math.atan2(bb, a) * 180 / Math.PI;
+    if (H < 0) H += 360;
+    return [L, C, H];
+  }
 
   function hclValuesToXY(xVal, yVal) {
     const cfg = hclSliceConfig();
@@ -1112,6 +1152,31 @@
     const marker = document.getElementById('hclMarker');
     marker.style.left = x + 'px';
     marker.style.top = y + 'px';
+  }
+
+  const hclMarkersEl = document.getElementById('hclMarkers');
+  function renderHclFixedMarkers() {
+    hclMarkersEl.innerHTML = '';
+    const cfg = hclSliceConfig();
+    state.fixedColors.forEach((fc, i) => {
+      if (fc.group && state.hiddenGroups.includes(fc.group)) return;
+      const [L, C, H] = hclRgbToLch(fc.r, fc.g, fc.b);
+      const values = { L, C, H };
+      const [x, y] = hclValuesToXY(values[cfg.x], values[cfg.y]);
+      const el = document.createElement('div');
+      el.className = 'hcl-marker fixed';
+      el.dataset.fcIndex = String(i);
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.background = fc.hex;
+      el.title = fcTooltip(fc);
+      hclMarkersEl.appendChild(el);
+    });
+  }
+
+  function setHclMarkerHighlight(fcIndex, on) {
+    const el = hclMarkersEl.querySelector(`.hcl-marker.fixed[data-fc-index="${fcIndex}"]`);
+    if (el) el.classList.toggle('hcl-marker-highlight', on);
   }
 
   function renderHclAxisLabels() {
@@ -1187,6 +1252,7 @@
       renderHclAxisLabels();
       drawHclWheel();
       renderHclMarker();
+      renderHclFixedMarkers();
     });
   });
 
@@ -1455,10 +1521,12 @@
     });
     chip.addEventListener('mouseenter', () => {
       setMarkerHighlight(i, true);
+      setHclMarkerHighlight(i, true);
       setDrawSwatchHighlight(i, true);
     });
     chip.addEventListener('mouseleave', () => {
       setMarkerHighlight(i, false);
+      setHclMarkerHighlight(i, false);
       setDrawSwatchHighlight(i, false);
     });
 
@@ -1649,6 +1717,7 @@
   function renderAll() {
     renderMask();
     renderMarkers();
+    renderHclFixedMarkers();
     renderSwatches();
     renderPinList();
     renderDrawPalette();
@@ -2122,6 +2191,7 @@
   renderHclAxisLabels();
   drawHclWheel();
   renderHclMarker();
+  renderHclFixedMarkers();
   updateHclHueSliderBackground();
 })();
 </script>
